@@ -39,9 +39,11 @@ def main() -> None:
     buildings = prepare_geometries(assign_building_ids(load_vector_data(buildings_path, args.buildings_layer)))
     scenes_metric, buildings_metric = project_to_local_metric(scenes, buildings)
 
+    buildings_metric = buildings_metric.reset_index().rename(columns={'index': 'building_index'})
+    buildings = buildings.reset_index().rename(columns={'index': 'building_index'})
     scene_lookup = scenes_metric[['scene_id', 'geometry']].copy()
     join = gpd.sjoin(
-        buildings_metric[['osm_id', 'geometry']],
+        buildings_metric[['building_index', 'osm_id', 'geometry']],
         scene_lookup,
         predicate='intersects',
         how='inner',
@@ -50,7 +52,10 @@ def main() -> None:
         raise RuntimeError('No buildings intersect the selected scenes.')
 
     join['intersection_area_m2'] = join.apply(
-        lambda row: buildings_metric.loc[row.name, 'geometry'].intersection(scene_lookup.loc[row['index_right'], 'geometry']).area,
+        lambda row: buildings_metric.loc[
+            buildings_metric['building_index'] == row['building_index'],
+            'geometry',
+        ].iloc[0].intersection(scene_lookup.loc[row['index_right'], 'geometry']).area,
         axis=1,
     )
     join = join.sort_values(['osm_id', 'intersection_area_m2'], ascending=[True, False])
@@ -58,8 +63,8 @@ def main() -> None:
     url_field = args.url_field or choose_identifier_field(scenes.columns, cfg.DEFAULT_SCENE_URL_FIELDS)
     assignments = []
     for osm_id, group in join.groupby('osm_id', sort=False):
-        building_geom_metric = buildings_metric.loc[group.index[0], 'geometry']
-        building_geom_wgs84 = buildings.loc[group.index[0], 'geometry']
+        building_index = group.iloc[0]['building_index']
+        building_geom_wgs84 = buildings.loc[buildings['building_index'] == building_index, 'geometry'].iloc[0]
         assigned = None
         for candidate_rank, candidate in enumerate(group.itertuples(), start=1):
             scene_id = candidate.scene_id

@@ -82,7 +82,8 @@ def load_vector_data(path: str | Path, layer: str | None = None) -> gpd.GeoDataF
         if layer:
             for layer_name, source_path, datasource in sources:
                 if layer_name == layer or f"layername={layer}" in (datasource or ''):
-                    return gpd.read_file(source_path, layer=layer if source_path.suffix.lower() == '.gpkg' else None)
+                    gpkg_layer = parse_qgis_layer_name(datasource or '')
+                    return gpd.read_file(source_path, layer=gpkg_layer if source_path.suffix.lower() == '.gpkg' else None)
             raise ValueError(f"Layer '{layer}' was not found in {path}")
         preferred = next((item for item in sources if 'scene' in (item[0] or '').lower() or 'oam' in (item[0] or '').lower()), sources[0])
         source_path = preferred[1]

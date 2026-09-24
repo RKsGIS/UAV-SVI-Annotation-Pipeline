@@ -32,10 +32,11 @@ def mask_uav_building_chip(raster_path, geometry, geometry_crs, padding_factor: 
             transform=out_transform,
             invert=True,
         )
-        masked_image = out_image.copy()
+        masked_image = out_image[:3].copy() if out_image.shape[0] > 3 else out_image.copy()
         masked_image[:, ~building_mask] = 0
         metadata = src.meta.copy()
         metadata.update({
+            'count': masked_image.shape[0],
             'height': masked_image.shape[1],
             'width': masked_image.shape[2],
             'transform': out_transform,

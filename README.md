@@ -47,7 +47,10 @@ The scene layer should contain one polygon per UAV scene. If possible, keep thes
 Example:
 
 ```bash
-python scripts/00_select_scenes.py           --input data/input/oam_scenes.gpkg           --buildings data/input/osm_buildings.gpkg           --require-buildings
+python scripts/00_select_scenes.py \
+  --input data/input/oam_scenes.gpkg \
+  --buildings data/input/osm_buildings.gpkg \
+  --require-buildings
 ```
 
 Outputs:
@@ -61,7 +64,9 @@ Outputs:
 Example:
 
 ```bash
-python scripts/01_download_uav.py           --selected-scenes data/selected_scenes.gpkg           --buildings data/input/osm_buildings.gpkg
+python scripts/01_download_uav.py \
+  --selected-scenes data/selected_scenes.gpkg \
+  --buildings data/input/osm_buildings.gpkg
 ```
 
 Outputs:
@@ -76,7 +81,9 @@ Outputs:
 Example:
 
 ```bash
-python scripts/02_download_svi.py           --selected-scenes data/selected_scenes.gpkg           --buildings data/intermediate/building_uav_assignments.gpkg
+python scripts/02_download_svi.py \
+  --selected-scenes data/selected_scenes.gpkg \
+  --buildings data/intermediate/building_uav_assignments.gpkg
 ```
 
 Outputs:
