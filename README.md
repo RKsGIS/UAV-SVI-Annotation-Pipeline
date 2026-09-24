@@ -2,7 +2,7 @@
 
 This repository contains a lightweight UAV/SVI pairing pipeline for building-level annotation tasks. It reuses and adapts core logic from the sibling repository [`RKsGIS/Assessing-Building-Heat-Resilience-Using-UAV-and-Street-Imagery-with-Coupled-Vision-Transformers`](https://github.com/RKsGIS/Assessing-Building-Heat-Resilience-Using-UAV-and-Street-Imagery-with-Coupled-Vision-Transformers), especially the original `preprocessing/` steps for Mapillary fetching, geospatial filtering, UAV masking, and panorama-facing crop logic.
 
-The supported workflow in this repository is the new numbered `scripts/` layout:
+The supported workflow in this repository is the numbered `scripts/` layout:
 
 1. `python scripts/00_select_scenes.py`
 2. `python scripts/01_download_uav.py`
@@ -44,8 +44,6 @@ The scene layer should contain one polygon per UAV scene. If possible, keep thes
 
 `scripts/00_select_scenes.py` reads the input GeoPackage or QGIS project, optionally intersects it with an OSM buildings layer, and writes `data/selected_scenes.gpkg`.
 
-Example:
-
 ```bash
 python scripts/00_select_scenes.py \
   --input data/input/oam_scenes.gpkg \
@@ -59,9 +57,7 @@ Outputs:
 
 ### 1. Download UAV scenes
 
-`scripts/01_download_uav.py` downloads the raster for each selected scene and assigns each building to the **largest intersecting raster that fully covers it**. If the first candidate fails, the script falls back to the next intersecting scene.
-
-Example:
+`scripts/01_download_uav.py` downloads the raster for each selected scene and assigns each building to the largest intersecting raster that fully covers the building footprint. If the first candidate fails, the script falls back to the next intersecting scene.
 
 ```bash
 python scripts/01_download_uav.py \
@@ -77,8 +73,6 @@ Outputs:
 ### 2. Download SVI panoramas
 
 `scripts/02_download_svi.py` fetches Mapillary image metadata near each building centroid, applies the nearby-point + visibility + compass-angle logic adapted from the sibling repo, and downloads the selected panorama(s).
-
-Example:
 
 ```bash
 python scripts/02_download_svi.py \
@@ -118,28 +112,76 @@ Outputs:
 - `data/intermediate/svi_chips/*.png`
 - `data/output_pairs/{osm_id}_svi.png`
 
-## Labeling
+## Label Studio Schema
 
-The repository includes `labeling_schemas/label_studio_schema.xml` for side-by-side UAV/SVI annotation. The schema expects fields such as:
+`labeling_schemas/label_studio_schema.xml` is configured for multi-attribute building heat-resilience annotation across both views.
 
-- `uav_image` (URL or local path exposed to Label Studio for the UAV chip)
-- `svi_image` (URL or local path exposed to Label Studio for the SVI chip)
-- `osm_id`
-- `structural_openness`
-- `number_of_floors`
+Expected task data keys:
+
+- `uav_image` — URL or local path exposed to Label Studio for the UAV chip
+- `streetview_image` — URL or local path exposed to Label Studio for the street-view / SVI chip
+- `osm_id` — building identifier shown to annotators
+
+Current annotation targets in the schema:
+
+- `roof_material`
+- `roof_tone`
+- `roof_shape`
 - `vegetation`
-- `material_rooftop`
-- `material_wall`
+- `facade_material`
 
-Example row:
+Example task JSON:
 
-```text
-338449341, closed_structure, one, yes, metal, concrete
+```json
+[
+  {
+    "data": {
+      "osm_id": "338449341",
+      "uav_image": "https://your-server.com/images/338449341_uav.png",
+      "streetview_image": "https://your-server.com/images/338449341_svi.png"
+    }
+  },
+  {
+    "data": {
+      "osm_id": "338449342",
+      "uav_image": "https://your-server.com/images/338449342_uav.png",
+      "streetview_image": "https://your-server.com/images/338449342_svi.png"
+    }
+  }
+]
 ```
 
-## QGIS Plugin Note
+If you load tasks from local files instead of URLs, keep the same keys and map them to paths that your Label Studio deployment can access.
 
-The `qgis_plugin/` folder is intentionally kept lightweight here. It provides a starting skeleton for interactive scene selection and preview (download/display button flow, OSM building overlays, compass arrows, red linking lines), but the CLI scripts are the supported pipeline entry point and do **not** require QGIS.
+## QGIS Plugin Attribution and Installation
+
+The `qgis_plugin/` folder keeps the upstream Mapillary preview plugin work already present in this repository and adds a small local scaffold (`plugin_main.py` plus `symbology/`) for later UAV/SVI-specific extensions.
+
+Credit:
+
+- Original plugin source: [`annadeckmyn/MapillaryClickPreview`](https://github.com/annadeckmyn/MapillaryClickPreview/)
+- This repository keeps that foundation visible, acknowledges the original work, and adapts it as a starting point for scene preview / download / display workflows in QGIS.
+
+Install the plugin in QGIS from source:
+
+1. Close QGIS.
+2. Copy `/home/runner/work/UAV-SVI-Annotation-Pipeline/UAV-SVI-Annotation-Pipeline/qgis_plugin` into your local QGIS plugins directory.
+3. Rename the copied folder to `MapillaryClickPreview` so it matches the existing plugin package layout.
+4. Start QGIS.
+5. Open `Plugins` -> `Manage and Install Plugins...`.
+6. Enable `MapillaryClickPreview`.
+7. Open `Plugins` -> `Mapillary` -> `Mapillary Token...` and paste your Mapillary access token.
+
+Typical plugin directories:
+
+- Windows (QGIS 3.x): `%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins`
+- Windows (QGIS 4.x): `%APPDATA%\QGIS\QGIS4\profiles\default\python\plugins`
+- Linux (QGIS 3.x): `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins`
+- Linux (QGIS 4.x): `~/.local/share/QGIS/QGIS4/profiles/default/python/plugins`
+- macOS (QGIS 3.x): `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins`
+- macOS (QGIS 4.x): `~/Library/Application Support/QGIS/QGIS4/profiles/default/python/plugins`
+
+The CLI scripts are still the supported pipeline entry point; the QGIS plugin is an optional interactive companion for coverage preview and future selection/download tooling.
 
 ## Environment
 
