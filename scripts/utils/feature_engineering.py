@@ -20,8 +20,8 @@ def process_svi_for_wall_brightness(line_info_df: pd.DataFrame) -> pd.DataFrame:
             line_info_df[column] = np.nan
 
     for idx, row in tqdm(line_info_df.iterrows(), total=len(line_info_df), desc="  Processing SVI"):
-        osm_id = str(int(row['osm_id']))
-        mapillary_id = str(int(row['mapillary_id']))
+        osm_id = str(row['osm_id'])
+        mapillary_id = str(row['mapillary_id'])
         line_x_full = row['line_x_pixel']
         half_side = row['half_cropped_image']
         if pd.isna(half_side) or pd.isna(line_x_full):
@@ -72,7 +72,7 @@ def calculate_roof_brightness(df: pd.DataFrame) -> pd.DataFrame:
     print("--> Calculating Roof Brightness...")
     results = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc="  Processing UAV"):
-        osm_id = str(int(row['osm_id']))
+        osm_id = str(row['osm_id'])
         tif_path = cfg.UAV_CHIPS_DIR / f"{osm_id}_uav.tif"
         if not tif_path.exists():
             results.append({'osm_id': osm_id})
@@ -106,8 +106,8 @@ def calculate_vegetation_presence(df: pd.DataFrame) -> pd.DataFrame:
     print("--> Calculating vegetation presence...")
     results = []
     for _, row in tqdm(df.iterrows(), total=len(df), desc="  Checking for vegetation"):
-        osm_id = str(int(row['osm_id']))
-        mapillary_id = str(int(row['mapillary_id']))
+        osm_id = str(row['osm_id'])
+        mapillary_id = str(row['mapillary_id'])
         csv_path = cfg.MAPILLARY_DETECTIONS_DIR / f"{mapillary_id}.csv"
         if not csv_path.exists():
             results.append({'osm_id': osm_id, 'contains_vegetation': False})

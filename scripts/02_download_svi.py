@@ -97,6 +97,7 @@ def main() -> None:
     assignments = gpd.GeoDataFrame(building_records, geometry='geometry', crs=buildings_wgs84.crs)
     args.assignments_output.parent.mkdir(parents=True, exist_ok=True)
     assignments.to_file(args.assignments_output, driver='GPKG')
+    cfg.SVI_VIEW_GEOMETRY_CSV.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(assignments.drop(columns='geometry')).to_csv(cfg.SVI_VIEW_GEOMETRY_CSV, index=False)
     print(f'Saved {len(assignments)} building-to-SVI assignments to {args.assignments_output}')
 
