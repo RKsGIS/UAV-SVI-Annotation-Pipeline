@@ -1,0 +1,40 @@
+<View>
+  <Header value="UAV / Street-View building annotation" />
+  <Text name="meta" value="OSM ID: $osm_id" />
+  <View style="display:flex; gap:16px; align-items:flex-start;">
+    <View>
+      <Header value="UAV image" size="4" />
+      <Image name="uav_image" value="$uav_image" zoom="true" />
+    </View>
+    <View>
+      <Header value="SVI image" size="4" />
+      <Image name="svi_image" value="$svi_image" zoom="true" />
+    </View>
+  </View>
+  <Choices name="structural_openness" toName="uav_image" choice="single-radio" showInLine="true">
+    <Choice value="closed_structure" />
+    <Choice value="semi_open" />
+    <Choice value="open_structure" />
+  </Choices>
+  <Choices name="number_of_floors" toName="uav_image" choice="single-radio" showInLine="true">
+    <Choice value="one" />
+    <Choice value="two" />
+    <Choice value="three_or_more" />
+  </Choices>
+  <Choices name="vegetation" toName="svi_image" choice="single-radio" showInLine="true">
+    <Choice value="yes" />
+    <Choice value="no" />
+  </Choices>
+  <Choices name="material_rooftop" toName="uav_image" choice="single-radio" showInLine="true">
+    <Choice value="metal" />
+    <Choice value="concrete" />
+    <Choice value="tile" />
+    <Choice value="other" />
+  </Choices>
+  <Choices name="material_wall" toName="svi_image" choice="single-radio" showInLine="true">
+    <Choice value="concrete" />
+    <Choice value="brick" />
+    <Choice value="metal" />
+    <Choice value="other" />
+  </Choices>
+</View>
