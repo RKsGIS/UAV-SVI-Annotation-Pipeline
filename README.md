@@ -122,6 +122,8 @@ Outputs:
 
 The repository includes `labeling_schemas/label_studio_schema.xml` for side-by-side UAV/SVI annotation. The schema expects fields such as:
 
+- `uav_image` (URL or local path exposed to Label Studio for the UAV chip)
+- `svi_image` (URL or local path exposed to Label Studio for the SVI chip)
 - `osm_id`
 - `structural_openness`
 - `number_of_floors`

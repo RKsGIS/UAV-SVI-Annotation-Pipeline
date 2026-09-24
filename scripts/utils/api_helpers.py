@@ -13,7 +13,7 @@ def fetch_mapillary_detections(image_ids):
     """Ported from the sibling repo's preprocessing utils."""
     print("--> Fetching Mapillary object detections...")
     os.makedirs(MAPILLARY_DETECTIONS_DIR, exist_ok=True)
-    unique_ids = [str(image_id) for image_id in image_ids if pd.notna(image_id)]
+    unique_ids = list(dict.fromkeys(str(image_id) for image_id in image_ids if pd.notna(image_id)))
     for image_id in tqdm(unique_ids, desc="  Fetching detections"):
         csv_path = os.path.join(MAPILLARY_DETECTIONS_DIR, f"{image_id}.csv")
         if os.path.exists(csv_path):

@@ -158,6 +158,33 @@ def find_scene_bbox(geom):
 def optional_query_filter(gdf: gpd.GeoDataFrame, expression: str | None) -> gpd.GeoDataFrame:
     if not expression:
         return gdf
-    frame = pd.DataFrame(gdf.drop(columns='geometry'))
-    mask = frame.eval(expression)
+    match = re.fullmatch(r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*(==|!=|>=|<=|>|<)\s*(.+?)\s*", expression)
+    if not match:
+        raise ValueError("Unsupported scene filter. Use a simple comparison such as 'building_count > 0'.")
+    column, operator, raw_value = match.groups()
+    if column not in gdf.columns:
+        raise ValueError(f"Column '{column}' is not present in the scene layer.")
+    raw_value = raw_value.strip().strip('"').strip("'")
+    value: object
+    lowered = raw_value.lower()
+    if lowered in {'true', 'false'}:
+        value = lowered == 'true'
+    else:
+        try:
+            value = int(raw_value)
+        except ValueError:
+            try:
+                value = float(raw_value)
+            except ValueError:
+                value = raw_value
+    series = gdf[column]
+    operations = {
+        '==': series == value,
+        '!=': series != value,
+        '>': series > value,
+        '<': series < value,
+        '>=': series >= value,
+        '<=': series <= value,
+    }
+    mask = operations[operator]
     return gdf.loc[mask].copy()

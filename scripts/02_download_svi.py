@@ -68,6 +68,9 @@ def main() -> None:
             continue
         candidates = points_metric.iloc[candidate_idx].copy()
         candidates['distance_m'] = candidates.geometry.distance(centroid)
+        candidates = candidates.loc[candidates['distance_m'] <= args.search_radius].copy()
+        if candidates.empty:
+            continue
         candidates = candidates.sort_values('distance_m')
         chosen = choose_visible_point(row, candidates, buildings_metric)
         if chosen is None:
