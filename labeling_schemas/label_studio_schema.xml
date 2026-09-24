@@ -1,0 +1,56 @@
+<View>
+  <View style="display: flex; gap: 20px; margin-bottom: 20px;">
+    <View style="flex: 1;">
+      <Header value="UAV / Aerial View (Roof &amp; Surroundings)"/>
+      <Image name="uav_view" value="$uav_image" maxWidth="100%"/>
+    </View>
+    <View style="flex: 1;">
+      <Header value="Street-View / Facade (Building Structure &amp; Shade)"/>
+      <Image name="streetview_view" value="$streetview_image" maxWidth="100%"/>
+    </View>
+  </View>
+
+  <View style="padding: 20px; background: #f9f9f9; border-radius: 8px;">
+    <Text name="meta" value="OSM ID: $osm_id"/>
+
+    <Header value="Task 1: Roof Material"/>
+    <Choices name="roof_material" toName="uav_view" choice="single" showInline="true">
+      <Choice value="Concrete / Slab"/>
+      <Choice value="Clay / Ceramic Tiles"/>
+      <Choice value="Metal / Corrugated Sheet"/>
+      <Choice value="Asbestos / Tarpaulin"/>
+      <Choice value="Wood / Thatch"/>
+      <Choice value="Other / Unknown"/>
+    </Choices>
+
+    <Header value="Task 2: Roof Tone (Albedo)" style="margin-top: 15px;"/>
+    <Choices name="roof_tone" toName="uav_view" choice="single" showInline="true">
+      <Choice value="Light / High Reflectance"/>
+      <Choice value="Medium Tone"/>
+      <Choice value="Dark / Low Reflectance"/>
+    </Choices>
+
+    <Header value="Task 3: Roof Structure / Shape" style="margin-top: 15px;"/>
+    <Choices name="roof_shape" toName="uav_view" choice="single" showInline="true">
+      <Choice value="Flat"/>
+      <Choice value="Pitched / Gabled"/>
+      <Choice value="Complex / Multi-tier"/>
+    </Choices>
+
+    <Header value="Task 4: Surrounding Vegetation / Shade Canopy" style="margin-top: 15px;"/>
+    <Choices name="vegetation" toName="uav_view" choice="single" showInline="true">
+      <Choice value="High / Dense Canopy"/>
+      <Choice value="Moderate Vegetation"/>
+      <Choice value="Low / None (Built Environment)"/>
+    </Choices>
+
+    <Header value="Task 5: Facade / Wall Material" style="margin-top: 15px;"/>
+    <Choices name="facade_material" toName="streetview_view" choice="single" showInline="true">
+      <Choice value="Brick / Masonry"/>
+      <Choice value="Concrete / Plastered"/>
+      <Choice value="Glass / Metal Curtain"/>
+      <Choice value="Wood / Lightweight"/>
+      <Choice value="Other / Unclear"/>
+    </Choices>
+  </View>
+</View>

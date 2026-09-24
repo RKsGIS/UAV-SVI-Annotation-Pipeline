@@ -1,8 +1,19 @@
-# Mapillary Click Preview
+# Mapillary Click Preview (adapted in this repository)
 
-QGIS plugin to load Mapillary coverage and preview the nearest Mapillary image from a map click.
+This folder preserves and adapts the original [`annadeckmyn/MapillaryClickPreview`](https://github.com/annadeckmyn/MapillaryClickPreview/) QGIS plugin work already present in this repository.
 
-## What It Does
+In `RKsGIS/UAV-SVI-Annotation-Pipeline`, it serves two purposes:
+
+- keep the original Mapillary coverage / click-preview workflow available
+- provide a starting point for future UAV/SVI-specific extensions such as scene selection, download/display buttons, OSM building overlays, compass arrows, and line symbology
+
+## Attribution
+
+- Original plugin author: Anna Deckmyn
+- Original upstream repository: <https://github.com/annadeckmyn/MapillaryClickPreview/>
+- This repository keeps that code visible and adds lightweight scaffolding (`plugin_main.py`, `symbology/`) without claiming the upstream plugin as original work.
+
+## What It Does Today
 
 - Adds a toggle tool for click-only preview on the map canvas.
 - Loads Mapillary coverage as vector layers (`image`, `sequence`) from:
@@ -19,20 +30,22 @@ QGIS plugin to load Mapillary coverage and preview the nearest Mapillary image f
 
 ## Requirements
 
-- QGIS `>= 3.44` and `< 5.0` (from plugin metadata; includes QGIS 3.44.7)
+- QGIS `>= 3.44` and `< 5.0`
 - Internet access for Mapillary API and tiles
 - A Mapillary access token
 
 ## Installation (From Source)
 
-1. Copy this folder into your QGIS plugin directory as `MapillaryClickPreview`.
-2. Restart QGIS.
-3. Enable the plugin in `Plugins > Manage and Install Plugins`.
+1. Close QGIS.
+2. Copy this folder into your QGIS plugin directory.
+3. Rename the copied folder to `MapillaryClickPreview`.
+4. Restart QGIS.
+5. Enable the plugin in `Plugins > Manage and Install Plugins`.
 
 Typical plugin directories:
 
-- Windows (QGIS 3.x): `%APPDATA%\\QGIS\\QGIS3\\profiles\\default\\python\\plugins`
-- Windows (QGIS 4.x): `%APPDATA%\\QGIS\\QGIS4\\profiles\\default\\python\\plugins`
+- Windows (QGIS 3.x): `%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins`
+- Windows (QGIS 4.x): `%APPDATA%\QGIS\QGIS4\profiles\default\python\plugins`
 - Linux (QGIS 3.x): `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins`
 - Linux (QGIS 4.x): `~/.local/share/QGIS/QGIS4/profiles/default/python/plugins`
 - macOS (QGIS 3.x): `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins`
@@ -43,9 +56,7 @@ Typical plugin directories:
 1. Open `Plugins > Mapillary > Mapillary Token...`
 2. Paste your Mapillary access token and save.
 
-The token is stored in QGIS settings under:
-
-- `mapillary/access_token`
+The token is stored in QGIS settings under `mapillary/access_token`.
 
 ## Usage
 
@@ -57,35 +68,16 @@ The token is stored in QGIS settings under:
 4. Left-click near an image feature to fetch and preview the nearest image.
 5. Right-click to stop click-only mode and restore the previous map tool.
 
-Notes:
-
-- Coverage refreshes with map canvas extent changes.
-- Downloaded `.mvt` tiles are cached in `%TEMP%\\go2mapillary` for up to 24 hours.
-
-## Menu Actions
-
-- `Mapillary Click Preview` (toggle tool)
-- `Mapillary Token...`
-- `Load Mapillary Coverage (Original)`
-- `Load Mapillary Coverage (Computed)`
-- `Filter Mapillary Coverage by Year...`
-
-## Troubleshooting
-
-- If coverage does not load, verify your access token and internet connection.
-- If preview fails, make sure a valid `Mapillary image` layer is present and clicked/selected.
-- If thumbnails fail to render, use the "Open in Mapillary" link shown in the preview dock.
-
 ## Development Notes
 
-- Main plugin entry point: `mapillary_click_preview.py`
+- Active upstream-style entry point: `mapillary_click_preview.py`
 - Click and preview logic: `mapillary_click_tool.py`
-- Layer styling: `res/mapillary_image.qml`, `res/mapillary_sequence.qml`
+- Local scaffold for future UAV/SVI actions: `plugin_main.py`
+- Placeholder styles for future annotation overlays: `symbology/`
 
 ## License
 
-This project is licensed under GNU GPL v2 or later.
-See `LICENSE` for full text.
+This plugin remains under GNU GPL v2 or later. See `LICENSE` for the full text.
 
 ## Disclaimer
 

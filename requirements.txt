@@ -1,0 +1,12 @@
+geopandas
+mapbox-vector-tile
+numpy
+opencv-python
+pandas
+Pillow
+python-dotenv
+rasterio
+requests
+scipy
+shapely
+tqdm

@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.DS_Store
+
+data/*
+!data/input/
+!data/output_pairs/
+data/input/*
+!data/input/.gitkeep
+data/output_pairs/*
+!data/output_pairs/.gitkeep
