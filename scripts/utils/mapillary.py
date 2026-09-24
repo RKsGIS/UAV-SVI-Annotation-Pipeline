@@ -32,18 +32,21 @@ def fetch_mapillary_points_for_scenes(
     for _, row in scenes_gdf.to_crs(epsg=4326).iterrows():
         minx, miny, maxx, maxy = row.geometry.bounds
         bbox_str = f"{minx},{miny},{maxx},{maxy}"
-        url = (
+        next_url = (
             f"https://graph.mapillary.com/images?access_token={access_token}"
             f"&bbox={bbox_str}&fields={fields}&limit=2000"
         )
         if creator_username:
-            url += f"&creator_username={creator_username}"
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        for item in response.json().get('data', []):
-            coords = item.get('computed_geometry', {}).get('coordinates')
-            if coords:
-                records.append({**item, 'geometry': Point(coords), 'scene_id': row['scene_id']})
+            next_url += f"&creator_username={creator_username}"
+        while next_url:
+            response = requests.get(next_url, timeout=30)
+            response.raise_for_status()
+            payload = response.json()
+            for item in payload.get('data', []):
+                coords = item.get('computed_geometry', {}).get('coordinates')
+                if coords:
+                    records.append({**item, 'geometry': Point(coords), 'scene_id': row['scene_id']})
+            next_url = payload.get('paging', {}).get('next')
         time.sleep(pause_seconds)
     if not records:
         return gpd.GeoDataFrame(columns=['id', 'scene_id', 'geometry'], geometry='geometry', crs='EPSG:4326')

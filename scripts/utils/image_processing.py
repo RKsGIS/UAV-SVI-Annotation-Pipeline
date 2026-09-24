@@ -80,6 +80,6 @@ def apply_focus_mask(image: np.ndarray, focus_ratio: float = 0.6) -> np.ndarray:
     focus_width = int(width * focus_ratio)
     margin = max((width - focus_width) // 2, 0)
     mask = np.zeros((height, width), dtype=np.uint8)
-    cv2.rectangle(mask, (margin, 0), (width - margin, height), color=255, thickness=-1)
+    cv2.rectangle(mask, (margin, 0), (max(width - margin - 1, margin), max(height - 1, 0)), color=255, thickness=-1)
     masked[mask == 0] = 0
     return masked

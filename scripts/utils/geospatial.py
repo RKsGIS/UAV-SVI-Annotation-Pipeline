@@ -58,7 +58,7 @@ def parse_qgis_datasource(datasource: str, base_dir: Path) -> Path | None:
     if dbname_match:
         candidate = Path(dbname_match.group(1))
         return candidate if candidate.is_absolute() else (base_dir / candidate).resolve()
-    path_part = datasource.split('|', 1)[0].strip()
+    path_part = datasource.split('|', 1)[0].split('?', 1)[0].strip()
     if not path_part:
         return None
     candidate = Path(path_part)

@@ -49,7 +49,7 @@ def main() -> None:
 
     if args.require_buildings:
         scenes = scenes.loc[scenes['has_osm_building']].copy()
-    if args.max_scenes:
+    if args.max_scenes is not None:
         scenes = scenes.head(args.max_scenes).copy()
     if scenes.empty:
         raise RuntimeError('Scene selection removed every feature; widen the filters and run again.')

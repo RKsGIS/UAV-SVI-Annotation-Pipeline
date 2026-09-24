@@ -44,7 +44,9 @@ def main() -> None:
         raise RuntimeError('MAPILLARY_ACCESS_TOKEN is required in the repository .env file.')
 
     scenes = prepare_geometries(assign_scene_ids(load_vector_data(args.selected_scenes, args.scene_layer)))
-    buildings = prepare_geometries(assign_building_ids(load_vector_data(args.buildings, args.buildings_layer)))
+    buildings = prepare_geometries(load_vector_data(args.buildings, args.buildings_layer))
+    if 'osm_id' not in buildings.columns:
+        buildings = assign_building_ids(buildings)
     points = fetch_mapillary_points_for_scenes(
         scenes,
         access_token=cfg.MAPILLARY_ACCESS_TOKEN,
