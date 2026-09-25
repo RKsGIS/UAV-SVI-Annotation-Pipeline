@@ -342,6 +342,7 @@ class MapillaryClickPreviewPlugin:
         self.coverage_layers = {level: None for level in LAYER_LEVELS}
         self.coverage_refreshing = False
         self._auto_preview_layer = None
+        self._explorer_coverage_layers = []
 
     # ------------------------------------------------------------------
     # Setup / teardown
@@ -463,11 +464,12 @@ class MapillaryClickPreviewPlugin:
         QgsSettings().setValue('mapillary/pano_only', checked)
         self._apply_filters_to_existing_layers()
 
-    def _load_buildings(self):
-        bounds = self._get_active_aoi_bounds() or self._get_canvas_bounds()
+    def _load_buildings(self, bounds=None, append=False):
+        if bounds is None:
+            bounds = self._get_active_aoi_bounds() or self._get_canvas_bounds()
         if not bounds or not all(_is_finite_number(v) for v in bounds):
             QgsMessageLog.logMessage('No valid extent/AOI to load buildings for.', 'Mapillary', Qgis.Warning)
-            return
+            return None
 
         width = abs(bounds[2] - bounds[0])
         height = abs(bounds[3] - bounds[1])
@@ -476,26 +478,28 @@ class MapillaryClickPreviewPlugin:
                 'Area too large for OSM buildings lookup. Zoom in further or select a smaller '
                 f'area (max ~{MAX_BUILDINGS_BBOX_DEG}° per side) to avoid Overpass timeouts.',
                 'Mapillary', Qgis.Warning)
-            return
+            return None
 
         try:
             buildings, source = _fetch_osm_buildings_layer(bounds)
             if buildings.isValid() and buildings.featureCount() > 0:
-                self._remove_buildings_layers()
-                QgsProject.instance().addMapLayer(buildings)
+                if append:
+                    buildings.setName(f'{BUILDINGS_LAYER_NAME} • ROI {len([l for l in QgsProject.instance().mapLayers().values() if isinstance(l, QgsVectorLayer) and l.name().startswith(BUILDINGS_LAYER_NAME)]) + 1}')
+                    QgsProject.instance().addMapLayer(buildings)
+                else:
+                    self._remove_buildings_layers()
+                    QgsProject.instance().addMapLayer(buildings)
                 QgsMessageLog.logMessage(
                     f'OSM buildings loaded via {source} ({buildings.featureCount()} features).',
                     'Mapillary', Qgis.Info)
+                return buildings
             elif buildings.isValid():
                 QgsMessageLog.logMessage('No buildings found for current extent/AOI.', 'Mapillary', Qgis.Info)
-            else:
-                QgsMessageLog.logMessage('OSM buildings layer is invalid.', 'Mapillary', Qgis.Warning)
         except Exception as e:
             QgsMessageLog.logMessage(
-                f'Failed to load OSM buildings: {e}. Public Overpass servers may be busy — '
-                'try again in a moment, zoom in to shrink the area, or install the QuickOSM '
-                'plugin for more download options.',
+                f'Failed to load OSM buildings: {e}. Public Overpass servers may be busy.',
                 'Mapillary', Qgis.Warning)
+        return None
 
     def _clear_all_layers(self):
         self._remove_coverage_layers()
@@ -544,15 +548,21 @@ class MapillaryClickPreviewPlugin:
 
     def _remove_coverage_layers(self):
         self._disconnect_auto_preview_layer()
+        layers = list(self._explorer_coverage_layers)
         for level in LAYER_LEVELS:
-            layer = self.coverage_layers.get(level)
-            if not layer:
+            if self.coverage_layers.get(level) is not None:
+                layers.append(self.coverage_layers[level])
+        seen=set()
+        for layer in layers:
+            if not layer or layer.id() in seen:
                 continue
+            seen.add(layer.id())
             try:
                 QgsProject.instance().removeMapLayer(layer.id())
             except Exception:
                 pass
-            self.coverage_layers[level] = None
+        self._explorer_coverage_layers = []
+        self.coverage_layers = {level: None for level in LAYER_LEVELS}
 
     def _remove_buildings_layers(self):
         for layer in list(QgsProject.instance().mapLayers().values()):
@@ -615,7 +625,7 @@ class MapillaryClickPreviewPlugin:
     # Mapillary coverage loading (only runs when explicitly triggered)
     # ------------------------------------------------------------------
 
-    def _load_coverage(self, tile_set='original', force=False):
+    def _load_coverage(self, tile_set='original', force=False, bounds=None, append=False):
         s = QgsSettings()
         token = s.value('mapillary/access_token', '', type=str).strip()
         if not token:
@@ -627,19 +637,18 @@ class MapillaryClickPreviewPlugin:
 
         server_url = _SERVER_URLS[tile_set].replace('{token}', token)
 
-        canvas = self.iface.mapCanvas()
-        aoi = self._get_active_aoi_bounds()
-        bounds = aoi if aoi else self._get_canvas_bounds()
+        if bounds is None:
+            bounds = self._get_active_aoi_bounds() or self._get_canvas_bounds()
 
         if not all(_is_finite_number(v) for v in bounds):
             QgsMessageLog.logMessage('Extent/AOI is not valid for tile loading.', 'Mapillary', Qgis.Warning)
             return
 
-        canvas_width = canvas.width()
-        if canvas_width <= 0:
-            return
-
-        map_units_per_pixel = abs(bounds[2] - bounds[0]) / canvas_width
+        # The requested ROI, not the current QGIS canvas, determines the tile
+        # resolution. This prevents a zoomed-out/zoomed-in canvas from changing
+        # how much Mapillary data is requested for the selected OAM scene.
+        target_pixels = 512.0
+        map_units_per_pixel = max(abs(bounds[2] - bounds[0]), abs(bounds[3] - bounds[1])) / target_pixels
         zoom_level = _zoom_for_pixel_size(map_units_per_pixel)
         zoom_level = max(0, min(int(zoom_level), 14))
 
@@ -686,7 +695,8 @@ class MapillaryClickPreviewPlugin:
                             if tile.isValid():
                                 layers[level] = _extend_layer(layers[level], tile, f'Mapillary {level}')
 
-            self._remove_coverage_layers()
+            if not append:
+                self._remove_coverage_layers()
 
             added = []
             for level in LAYER_LEVELS:
@@ -695,8 +705,13 @@ class MapillaryClickPreviewPlugin:
                     qml_path = os.path.join(os.path.dirname(__file__), 'res', f'mapillary_{level}.qml')
                     if os.path.exists(qml_path):
                         lyr.loadNamedStyle(qml_path)
-                    QgsProject.instance().addMapLayer(lyr)
-                    self.coverage_layers[level] = lyr
+                    if append:
+                        lyr.setName(f'Mapillary {level} • ROI {len(self._explorer_coverage_layers) // 2 + 1}')
+                        QgsProject.instance().addMapLayer(lyr)
+                        self._explorer_coverage_layers.append(lyr)
+                    else:
+                        QgsProject.instance().addMapLayer(lyr)
+                        self.coverage_layers[level] = lyr
                     added.append(lyr)
 
             self.coverage_tile_set = tile_set
@@ -704,7 +719,7 @@ class MapillaryClickPreviewPlugin:
 
             if added:
                 self._apply_filters_to_existing_layers()
-                self._connect_auto_preview_layer(self.coverage_layers.get('image'))
+                self._connect_auto_preview_layer(next((l for l in added if l.name().startswith('Mapillary image')), None) or self.coverage_layers.get('image'))
                 QgsMessageLog.logMessage(
                     f'Mapillary coverage loaded: {len(added)} layer(s) at zoom {zoom_level}.',
                     'Mapillary', Qgis.Info)
