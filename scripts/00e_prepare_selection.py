@@ -4,11 +4,14 @@
 Pick scenes from your student package and download the OSM buildings inside them.
 Writes data/selected_scenes.gpkg and data/input/osm_buildings.gpkg.
 
-  python scripts/00e_prepare_selection.py --package student_packages/student_03_scenes.gpkg --list
-  python scripts/00e_prepare_selection.py --package student_packages/student_03_scenes.gpkg --scene-ids ID1 ID2
+  python scripts/00e_prepare_selection.py --package student_01_scenes.gpkg --list
+  python scripts/00e_prepare_selection.py --package student_01_scenes.gpkg --scene-ids ID1 ID2
+
+--package is a file name inside data/input/packages/ or a full path.
 """
 
 import argparse
+from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
@@ -26,7 +29,10 @@ def main() -> None:
     parser.add_argument("--list", action="store_true", help="Print the scenes in the package and exit.")
     args = parser.parse_args()
 
-    scenes = gpd.read_file(args.package)
+    package = Path(args.package)
+    if not package.exists():
+        package = cfg.PACKAGES_DIR / args.package
+    scenes = gpd.read_file(package)
     scenes["scene_id"] = scenes["scene_id"].astype(str)
     if args.list:
         cols = ["scene_id", "country", "title", "gsd_cm", "area_km2", "valid_los_matches"]
@@ -36,7 +42,7 @@ def main() -> None:
     if args.scene_ids:
         missing = set(args.scene_ids) - set(scenes["scene_id"])
         if missing:
-            raise SystemExit(f"Scene IDs not in {args.package}: {sorted(missing)}")
+            raise SystemExit(f"Scene IDs not in {package}: {sorted(missing)}")
         scenes = scenes[scenes["scene_id"].isin(args.scene_ids)]
 
     cfg.ensure_runtime_directories()

@@ -10,5 +10,6 @@ data/*
 !data/output_pairs/
 data/input/*
 !data/input/.gitkeep
+!data/input/packages/
 data/output_pairs/*
 !data/output_pairs/.gitkeep

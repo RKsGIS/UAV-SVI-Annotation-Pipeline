@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 ROOT_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT_DIR / "data"
 INPUT_DIR = DATA_DIR / "input"
+PACKAGES_DIR = INPUT_DIR / "packages"
 INTERMEDIATE_DIR = DATA_DIR / "intermediate"
 OUTPUT_PAIRS_DIR = DATA_DIR / "output_pairs"
 

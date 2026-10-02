@@ -25,6 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--buildings-layer', default=None)
     parser.add_argument('--url-field', default=None, help='Optional explicit raster URL field name.')
     parser.add_argument('--output', type=Path, default=cfg.BUILDING_ASSIGNMENTS_FILE)
+    parser.add_argument('--osm-ids', nargs='*', default=None, help='Only process these osm_id values.')
+    parser.add_argument('--limit', type=int, default=None, help='Process a random sample of N buildings (seed 0).')
     return parser
 
 
@@ -37,6 +39,10 @@ def main() -> None:
 
     scenes = prepare_geometries(assign_scene_ids(load_vector_data(args.selected_scenes, args.scene_layer)))
     buildings = prepare_geometries(assign_building_ids(load_vector_data(buildings_path, args.buildings_layer)))
+    if args.osm_ids:
+        buildings = buildings[buildings['osm_id'].isin(args.osm_ids)]
+    if args.limit and len(buildings) > args.limit:
+        buildings = buildings.sample(args.limit, random_state=0)
     scenes_metric, buildings_metric = project_to_local_metric(scenes, buildings)
 
     buildings_metric = buildings_metric.reset_index().rename(columns={'index': 'building_index'})
@@ -51,13 +57,10 @@ def main() -> None:
     if join.empty:
         raise RuntimeError('No buildings intersect the selected scenes.')
 
-    join['intersection_area_m2'] = join.apply(
-        lambda row: buildings_metric.loc[
-            buildings_metric['building_index'] == row['building_index'],
-            'geometry',
-        ].iloc[0].intersection(scene_lookup.loc[row['index_right'], 'geometry']).area,
-        axis=1,
-    )
+    join['intersection_area_m2'] = [
+        building_geom.intersection(scene_lookup.loc[scene_idx, 'geometry']).area
+        for building_geom, scene_idx in zip(join.geometry, join['index_right'])
+    ]
     join = join.sort_values(['osm_id', 'intersection_area_m2'], ascending=[True, False])
 
     url_field = args.url_field or choose_identifier_field(scenes.columns, cfg.DEFAULT_SCENE_URL_FIELDS)

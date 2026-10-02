@@ -23,8 +23,12 @@ def square_crop_geometry(geometry, padding_factor: float = 1.25, min_size: float
 
 def mask_uav_building_chip(raster_path, geometry, geometry_crs, padding_factor: float = 1.25):
     with rasterio.open(raster_path) as src:
-        geometry = gpd.GeoSeries([geometry], crs=geometry_crs).to_crs(src.crs).iloc[0]
-        crop_geom = square_crop_geometry(geometry, padding_factor=padding_factor)
+        series = gpd.GeoSeries([geometry], crs=geometry_crs)
+        # Pad in metres (local UTM); the raster CRS may be in degrees.
+        utm = series.estimate_utm_crs()
+        crop_utm = square_crop_geometry(series.to_crs(utm).iloc[0], padding_factor=padding_factor)
+        crop_geom = gpd.GeoSeries([crop_utm], crs=utm).to_crs(src.crs).iloc[0]
+        geometry = series.to_crs(src.crs).iloc[0]
         out_image, out_transform = mask(src, [mapping(crop_geom)], crop=True, all_touched=False)
         building_mask = geometry_mask(
             [mapping(geometry)],
