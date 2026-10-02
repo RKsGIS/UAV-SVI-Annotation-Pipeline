@@ -1,199 +1,145 @@
-# UAV-SVI Annotation Pipeline
+# UAV-SVI Building Annotation (student branch)
 
-This repository contains a lightweight UAV/SVI pairing pipeline for building-level annotation tasks. It reuses and adapts core logic from the sibling repository [`RKsGIS/Assessing-Building-Heat-Resilience-Using-UAV-and-Street-Imagery-with-Coupled-Vision-Transformers`](https://github.com/RKsGIS/Assessing-Building-Heat-Resilience-Using-UAV-and-Street-Imagery-with-Coupled-Vision-Transformers), especially the original `preprocessing/` steps for Mapillary fetching, geospatial filtering, UAV masking, and panorama-facing crop logic.
+You label buildings from two views of the same building: a **UAV (drone) top view** and a **street-level (SVI) view**. This branch contains everything you need. The scene catalog was built by the organiser (scripts `00a`-`00d`, see the end of this file).
 
-The supported workflow in this repository is the numbered `scripts/` layout:
-
-1. `python scripts/00_select_scenes.py`
-2. `python scripts/01_download_uav.py`
-3. `python scripts/02_download_svi.py`
-4. `python scripts/03_mask_uav.py`
-5. `python scripts/04_mask_svi.py`
-
-## Repository Layout
-
-```
-UAV-SVI-Annotation-Pipeline/
-├── qgis_plugin/                 # QGIS plugin skeleton + existing plugin work
-├── scripts/                     # Standalone backend pipeline
-├── labeling_schemas/            # Annotation tool templates
-├── data/
-│   ├── input/                   # User-provided .gpkg / .qgs / .qgz and optional OSM buildings
-│   └── output_pairs/            # Final {osm_id}_uav.png / {osm_id}_svi.png chips
-├── preprocessing/               # Legacy/source preprocessing retained for reference
-├── requirements.txt
-└── README.md
+```mermaid
+flowchart TD
+    A[student_packages/student_XX_scenes.gpkg<br/>pick one package] --> B[QGIS plugin: explore scenes, buildings, SVI points]
+    B --> C[00e select scenes + OSM buildings]
+    C --> D[01 download UAV] --> E[02 download SVI]
+    E --> F[03 mask UAV] --> G[04 mask SVI]
+    G --> H[05 package pairs: 256x256, osm_id.png]
+    H --> I{label}
+    I -->|notebook / CSV| J[labels_NAME.csv]
+    I -->|Label Studio + 07| J
+    J --> K[06 validate]
+    K --> L[upload to shared repo:<br/>uav/, svi/, labels/labels_NAME.csv]
+    L -.->|Track B| M[model/train.py<br/>uav / svi / both]
 ```
 
-## Inputs
-
-Place the user-supplied source files in `data/input/`:
-
-- a GeoPackage containing OAM scene polygons, **or**
-- a QGIS project file (`.qgs` / `.qgz`) that references the scene layer
-- optionally an OSM buildings layer used for filtering and downstream chip creation
-
-The scene layer should contain one polygon per UAV scene. If possible, keep these fields in the layer (or rename them with CLI arguments):
-
-- a scene identifier (`scene_id`, `id`, `uuid`, `oam_id`, ...)
-- a download URL for the raster (`download_url`, `asset_url`, `url`, `tif_url`, ...)
-
-## Sequential Workflow
-
-### 0. Select scenes
-
-`scripts/00_select_scenes.py` reads the input GeoPackage or QGIS project, optionally intersects it with an OSM buildings layer, and writes `data/selected_scenes.gpkg`.
+## 1. Setup
 
 ```bash
-python scripts/00_select_scenes.py \
-  --input data/input/oam_scenes.gpkg \
-  --buildings data/input/osm_buildings.gpkg \
-  --require-buildings
-```
-
-Outputs:
-
-- `data/selected_scenes.gpkg`
-
-### 1. Download UAV scenes
-
-`scripts/01_download_uav.py` downloads the raster for each selected scene and assigns each building to the largest intersecting raster that fully covers the building footprint. If the first candidate fails, the script falls back to the next intersecting scene.
-
-```bash
-python scripts/01_download_uav.py \
-  --selected-scenes data/selected_scenes.gpkg \
-  --buildings data/input/osm_buildings.gpkg
-```
-
-Outputs:
-
-- `data/intermediate/uav_rasters/*.tif`
-- `data/intermediate/building_uav_assignments.gpkg`
-
-### 2. Download SVI panoramas
-
-`scripts/02_download_svi.py` fetches Mapillary image metadata near each building centroid, applies the nearby-point + visibility + compass-angle logic adapted from the sibling repo, and downloads the selected panorama(s).
-
-```bash
-python scripts/02_download_svi.py \
-  --selected-scenes data/selected_scenes.gpkg \
-  --buildings data/intermediate/building_uav_assignments.gpkg
-```
-
-Outputs:
-
-- `data/intermediate/mapillary_points.gpkg`
-- `data/intermediate/buildings_with_svi.gpkg`
-- `data/intermediate/svi_panoramas/*.jpg`
-
-### 3. Mask UAV chips
-
-`scripts/03_mask_uav.py` crops each assigned UAV raster around its building footprint and applies a building mask. It writes final annotation chips to `data/output_pairs/`.
-
-```bash
-python scripts/03_mask_uav.py
-```
-
-Outputs:
-
-- `data/intermediate/uav_chips/*.tif`
-- `data/output_pairs/{osm_id}_uav.png`
-
-### 4. Mask SVI chips
-
-`scripts/04_mask_svi.py` reads the stored building-to-panorama geometry, crops the building-facing section of the panorama, and saves paired chips to `data/output_pairs/`.
-
-```bash
-python scripts/04_mask_svi.py
-```
-
-Outputs:
-
-- `data/intermediate/svi_chips/*.png`
-- `data/output_pairs/{osm_id}_svi.png`
-
-## Label Studio Schema
-
-`labeling_schemas/label_studio_schema.xml` is configured for multi-attribute building heat-resilience annotation across both views.
-
-Expected task data keys:
-
-- `uav_image` — URL or local path exposed to Label Studio for the UAV chip
-- `streetview_image` — URL or local path exposed to Label Studio for the street-view / SVI chip
-- `osm_id` — building identifier shown to annotators
-
-Current annotation targets in the schema:
-
-- `roof_material`
-- `roof_tone`
-- `roof_shape`
-- `vegetation`
-- `facade_material`
-
-Example task JSON:
-
-```json
-[
-  {
-    "data": {
-      "osm_id": "338449341",
-      "uav_image": "https://your-server.com/images/338449341_uav.png",
-      "streetview_image": "https://your-server.com/images/338449341_svi.png"
-    }
-  },
-  {
-    "data": {
-      "osm_id": "338449342",
-      "uav_image": "https://your-server.com/images/338449342_uav.png",
-      "streetview_image": "https://your-server.com/images/338449342_svi.png"
-    }
-  }
-]
-```
-
-If you load tasks from local files instead of URLs, keep the same keys and map them to paths that your Label Studio deployment can access.
-
-## QGIS Plugin Attribution and Installation
-
-The `qgis_plugin/` folder keeps the upstream Mapillary preview plugin work already present in this repository and adds a small local scaffold (`plugin_main.py` plus `symbology/`) for later UAV/SVI-specific extensions.
-
-Credit:
-
-- Original plugin source: [`annadeckmyn/MapillaryClickPreview`](https://github.com/annadeckmyn/MapillaryClickPreview/)
-- This repository keeps that foundation visible, acknowledges the original work, and adapts it as a starting point for scene preview / download / display workflows in QGIS.
-
-Install the plugin in QGIS from source:
-
-1. Close QGIS.
-2. Copy `/home/runner/work/UAV-SVI-Annotation-Pipeline/UAV-SVI-Annotation-Pipeline/qgis_plugin` into your local QGIS plugins directory.
-3. Rename the copied folder to `MapillaryClickPreview` so it matches the existing plugin package layout.
-4. Start QGIS.
-5. Open `Plugins` -> `Manage and Install Plugins...`.
-6. Enable `MapillaryClickPreview`.
-7. Open `Plugins` -> `Mapillary` -> `Mapillary Token...` and paste your Mapillary access token.
-
-Typical plugin directories:
-
-- Windows (QGIS 3.x): `%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins`
-- Windows (QGIS 4.x): `%APPDATA%\QGIS\QGIS4\profiles\default\python\plugins`
-- Linux (QGIS 3.x): `~/.local/share/QGIS/QGIS3/profiles/default/python/plugins`
-- Linux (QGIS 4.x): `~/.local/share/QGIS/QGIS4/profiles/default/python/plugins`
-- macOS (QGIS 3.x): `~/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins`
-- macOS (QGIS 4.x): `~/Library/Application Support/QGIS/QGIS4/profiles/default/python/plugins`
-
-The CLI scripts are still the supported pipeline entry point; the QGIS plugin is an optional interactive companion for coverage preview and future selection/download tooling.
-
-## Environment
-
-Create a `.env` file in the repository root for API-backed steps:
-
-```env
-MAPILLARY_ACCESS_TOKEN=your_token_here
-MAPILLARY_CREATOR_USERNAME=
-```
-
-Install dependencies with:
-
-```bash
+git clone -b student <this repo>
+cd UAV-SVI-Annotation-Pipeline
 pip install -r requirements.txt
 ```
+
+Create `.env` in the repository root (needed for step 02, free token from the Mapillary developer dashboard):
+
+```env
+MAPILLARY_ACCESS_TOKEN=MLY|...
+```
+
+Never commit `.env`.
+
+## 2. Choose a scene package
+
+`student_packages/` holds 10 GeoPackages (about 7,300 labelable pairs in total, Global South scenes first). Take **one**, write your name next to its number in the shared Google Sheet so nobody labels the same package, then look inside:
+
+```bash
+python scripts/00e_prepare_selection.py --package student_packages/student_03_scenes.gpkg --list
+```
+
+If scenes overlap, you can crop from the overlapping area yourself (merge the rasters) or simply choose non-overlapping scene IDs.
+
+## 3. Explore in QGIS (optional)
+
+Install the plugin from `releases/MapillaryClickPreview.zip`: QGIS > Plugins > Manage and Install Plugins > **Install from ZIP**. It needs QGIS 4.0 or newer. Set your token under Plugins > Mapillary > Mapillary Token. Open your package `.gpkg` in QGIS to see the scene footprints and load `data/input/osm_buildings.gpkg` (from step 4) so that building ids match your pipeline ids.
+
+The plugin has two tabs:
+
+- **Explore**: display UAV, SVI and buildings, preview a Mapillary image with its building highlighted. If you are sure the highlighted building is the one in the image, add matching cues in the notes box and press **Log previewed building + image as pair**. This appends `osm_id, mapillary_id, distance, compass, notes` to `submission/selected_pairs.csv`.
+- **Label**: choose your `submission` folder, page through the pairs, set the five labels and press Save and next. It writes the same `labels_<name>.csv` as the scripts and never edits GeoPackages. "Zoom to building" jumps to the building in QGIS.
+
+The plugin is optional: it only reads and writes files in `submission/`, so you can mix it with the scripts and the notebook at any point.
+
+## 4. Create the image pairs
+
+```bash
+python scripts/00e_prepare_selection.py --package student_packages/student_03_scenes.gpkg --scene-ids ID1 ID2   # omit --scene-ids for all
+python scripts/01_download_uav.py
+python scripts/02_download_svi.py
+python scripts/03_mask_uav.py
+python scripts/04_mask_svi.py
+python scripts/05_package_pairs.py --name yourname
+```
+
+Raw outputs land in `data/output_pairs/`. Every pair belongs to one specific OSM building: the UAV chip is cropped and masked to that building's footprint, the SVI chip is cut around the direction from the camera to that building. Finding good buildings is your job, so look at the pairs before labelling (the notebook shows them).
+
+- OSM buildings include ways and multipolygon relations. Relation ids are written as `r<id>` so they never collide with way ids.
+- `pairs_index_yourname.csv` (from step 05) records which Mapillary image and scene each `osm_id` came from, so nothing depends on file names.
+- Automatic SVI matching is only a suggestion. To force the image you picked in QGIS, add `--manual-pairs submission/selected_pairs.csv` (and `--only-manual` to build pairs only for those buildings) to step 02.
+- Optional: `python scripts/00f_merge_overlaps.py --scene-ids ID1 ID2` mosaics overlapping scenes so buildings on a scene border are fully covered; `--buildings a.gpkg b.gpkg` merges building files without duplicate `osm_id`.
+
+Step 05 produces the upload format in `submission/`:
+
+```
+submission/uav/<osm_id>.png        256x256
+submission/svi/<osm_id>.png        256x256
+submission/labels_yourname.csv     one row per osm_id, label columns empty
+submission/pairs_index_yourname.csv
+```
+
+The same steps run in `notebooks/student_workflow.ipynb` (load package, choose scenes, tweak parameters, build pairs, look at them, label).
+
+## 5. Label
+
+Write your labels into `submission/labels_yourname.csv`. Allowed values:
+
+| column | values | judged from |
+|---|---|---|
+| `osm_id` | pre-filled | |
+| `structural_openness` | `closed_structure`, `open_structure`, `unknown` | UAV |
+| `number_of_floors` | `one`, `two`, `three_or_more`, `unknown` | SVI |
+| `vegetation` | `yes`, `no` | UAV |
+| `material_rooftop` | `concrete`, `metal`, `tile`, `asbestos`, `thatch_wood`, `other`, `unknown` | UAV |
+| `material_wall` | `concrete`, `brick`, `metal`, `wood`, `glass`, `other`, `unknown` | SVI |
+
+Use `unknown` rather than guessing. Example: [labeling_schemas/example_labels.csv](labeling_schemas/example_labels.csv).
+
+Choose one way to label:
+
+- **Notebook widget**: the labelling cell in `notebooks/student_workflow.ipynb`.
+- **Spreadsheet/CSV**: edit the CSV directly. Keep `osm_id` as text (do not let Excel convert it).
+- **Label Studio**:
+  1. `pip install label-studio`, then set `LOCAL_FILES_SERVING_ENABLED=true` and `LOCAL_FILES_DOCUMENT_ROOT=<repo>/submission`, and start `label-studio`.
+  2. Create a project, paste [labeling_schemas/label_studio_schema.xml](labeling_schemas/label_studio_schema.xml) as the labeling config.
+  3. Add a Local Files storage pointing at `submission`, then `python scripts/07_labelstudio.py tasks` and import `submission/labelstudio_tasks.json`.
+  4. After labelling, export as JSON and run `python scripts/07_labelstudio.py export --name yourname --export export.json`.
+
+## 6. Validate and upload
+
+```bash
+python scripts/06_validate_submission.py --name yourname
+```
+
+Fix every reported problem, then add to the **shared repo**:
+
+```
+uav/<osm_id>.png
+svi/<osm_id>.png
+labels/labels_yourname.csv
+pairs/pairs_index_yourname.csv
+```
+
+Image files carry only the `osm_id`; the CSV file names tell us who produced them and the pairs index tells us which Mapillary image each building was paired with. Every `osm_id` in your CSV must have an image in both folders.
+
+## Track B: models
+
+```bash
+pip install -r requirements-model.txt
+python model/train.py --name yourname --target material_rooftop --view uav    # single view
+python model/train.py --name yourname --target material_wall --view svi
+python model/train.py --name yourname --target material_wall --view both      # cross-view fusion
+```
+
+It fine-tunes a ResNet-18 and prints validation accuracy next to the majority-class baseline. The split is random; if your buildings sit close together, say so when you report results.
+
+## Attribution
+
+OpenAerialMap imagery (check each scene licence in `student_packages`), Mapillary imagery (CC BY-SA 4.0, never try to undo blurring), OpenStreetMap contributors (ODbL). QGIS plugin based on [MapillaryClickPreview](https://github.com/annadeckmyn/MapillaryClickPreview/).
+
+## Organiser scripts (not needed by students)
+
+`scripts/00a`-`00d` build the catalog and the 10 packages: OAM catalog, Mapillary/OSM filtering, line-of-sight scoring, claim sheet. They need a Mapillary token in `.env` and take hours.

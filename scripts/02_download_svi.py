@@ -21,6 +21,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--search-radius', type=float, default=cfg.DEFAULT_SEARCH_RADIUS_METERS)
     parser.add_argument('--points-output', type=Path, default=cfg.MAPILLARY_POINTS_FILE)
     parser.add_argument('--assignments-output', type=Path, default=cfg.BUILDINGS_WITH_SVI_FILE)
+    parser.add_argument('--manual-pairs', type=Path, default=None, help='CSV with osm_id,mapillary_id chosen by you (QGIS plugin: selected_pairs.csv).')
+    parser.add_argument('--only-manual', action='store_true', help='Only process buildings listed in --manual-pairs.')
     return parser
 
 
@@ -62,21 +64,36 @@ def main() -> None:
     buildings_metric, points_metric = project_to_local_metric(buildings_wgs84, points_wgs84)
 
     building_records = []
+    manual = {}
+    if args.manual_pairs:
+        pairs = pd.read_csv(args.manual_pairs, dtype=str, keep_default_na=False)
+        manual = dict(zip(pairs['osm_id'], pairs['mapillary_id']))
     for row in buildings_metric.itertuples():
+        osm_key = str(row.osm_id)
+        if args.only_manual and osm_key not in manual:
+            continue
         centroid = row.geometry.centroid
-        buffer = centroid.buffer(args.search_radius)
-        candidate_idx = list(points_metric.sindex.query(buffer, predicate='intersects'))
-        if not candidate_idx:
-            continue
-        candidates = points_metric.iloc[candidate_idx].copy()
-        candidates['distance_m'] = candidates.geometry.distance(centroid)
-        candidates = candidates.loc[candidates['distance_m'] <= args.search_radius].copy()
-        if candidates.empty:
-            continue
-        candidates = candidates.sort_values('distance_m')
-        chosen = choose_visible_point(row, candidates, buildings_metric)
-        if chosen is None:
-            continue
+        if osm_key in manual:
+            match = points_metric[points_metric['id'].astype(str) == manual[osm_key]].copy()
+            if match.empty:
+                print(f'Skipping {osm_key}: Mapillary image {manual[osm_key]} is not among the downloaded points.')
+                continue
+            match['distance_m'] = match.geometry.distance(centroid)
+            chosen = next(match.head(1).itertuples())
+        else:
+            buffer = centroid.buffer(args.search_radius)
+            candidate_idx = list(points_metric.sindex.query(buffer, predicate='intersects'))
+            if not candidate_idx:
+                continue
+            candidates = points_metric.iloc[candidate_idx].copy()
+            candidates['distance_m'] = candidates.geometry.distance(centroid)
+            candidates = candidates.loc[candidates['distance_m'] <= args.search_radius].copy()
+            if candidates.empty:
+                continue
+            candidates = candidates.sort_values('distance_m')
+            chosen = choose_visible_point(row, candidates, buildings_metric)
+            if chosen is None:
+                continue
         point_row = points_wgs84.loc[chosen.Index]
         building_row_wgs84 = buildings_wgs84.loc[row.Index]
         bearing, relative_angle, target_x, half = compute_target_x(point_row, building_row_wgs84.geometry.centroid)

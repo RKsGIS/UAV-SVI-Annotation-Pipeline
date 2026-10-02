@@ -10,11 +10,12 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 from qgis.PyQt.QtGui import QIcon
+from qgis.PyQt.QtCore import QMetaType
 from qgis.PyQt.QtWidgets import (
     QAction, QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox,
 )
 from qgis.core import (
-    QgsSettings, QgsProject, QgsVectorLayer,
+    QgsSettings, QgsProject, QgsVectorLayer, QgsField,
     QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsPointXY,
     QgsMessageLog, Qgis, QgsFeature, QgsGeometry,
 )
@@ -35,13 +36,10 @@ MAPILLARY_LAUNCH_YEAR = 2012
 MAPILLARY_LAYER_NAMES = {'Mapillary image', 'Mapillary sequence'}
 BUILDINGS_LAYER_NAME = 'OSM Buildings'
 
-# Public Overpass endpoints, tried in order until one responds. Large/global
-# instances (overpass-api.de) are frequently rate-limited or overloaded and
-# will 406/504/timeout under load; smaller regional mirrors are often faster
-# for a small bbox. Users can override this list via QGIS Settings if needed.
+# Prioritize the most stable public server first
 _OVERPASS_ENDPOINTS = [
-    'https://overpass.kumi.systems/api/interpreter',
     'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
     'https://overpass.private.coffee/api/interpreter',
     'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ]
@@ -50,14 +48,11 @@ _OVERPASS_HEADERS = {
     'Accept': 'application/json',
     'Content-Type': 'application/x-www-form-urlencoded',
 }
-_OVERPASS_REQUEST_TIMEOUT = 25  # seconds per endpoint attempt
-_OVERPASS_QUERY_TIMEOUT = 20    # seconds passed inside the Overpass QL query itself
+_OVERPASS_REQUEST_TIMEOUT = 25  
+_OVERPASS_QUERY_TIMEOUT = 20    
 
-# Overpass (and most bbox-based OSM services) get slow/likely to time out once
-# the requested area gets large. Building queries in particular can return a
-# huge number of ways, so we cap the AOI/extent size and ask the user to zoom
-# in or draw a smaller selection instead of silently hammering the servers.
-MAX_BUILDINGS_BBOX_DEG = 0.03  # ~roughly 3 km at the equator
+# Increased from 0.03 to 0.15 (~15km) to safely accommodate standard OAM scenes
+MAX_BUILDINGS_BBOX_DEG = 0.15  
 
 BUILDINGS_CACHE_EXPIRE_HOURS = 24
 _BUILDINGS_CACHE_EXPIRE = timedelta(hours=BUILDINGS_CACHE_EXPIRE_HOURS)
@@ -134,7 +129,6 @@ def _extend_layer(target, source, name):
 
 
 def _build_year_filter_expr(from_year, to_year):
-    """QGIS expression that filters coverage features by captured_at year range."""
     start_ms = int(datetime(from_year, 1, 1, tzinfo=timezone.utc).timestamp() * 1000)
     end_ms = int(datetime(to_year + 1, 1, 1, tzinfo=timezone.utc).timestamp() * 1000) - 1
     return f'captured_at IS NULL OR (captured_at >= {start_ms} AND captured_at <= {end_ms})'
@@ -142,11 +136,11 @@ def _build_year_filter_expr(from_year, to_year):
 
 def _build_overpass_query(bounds):
     xmin, ymin, xmax, ymax = bounds
-    # "out geom;" (no tags/ids) is enough for footprints and is noticeably
-    # lighter/faster than "out body geom;" for building-dense areas.
+    # FIX 2: Explicitly query BOTH way and relation elements
     return (
-        f'[out:json][timeout:{_OVERPASS_QUERY_TIMEOUT}];'
-        f'(way["building"]({ymin},{xmin},{ymax},{xmax}););'
+        f'[out:json][timeout:{_OVERPASS_QUERY_TIMEOUT}];('
+        f'way["building"]({ymin},{xmin},{ymax},{xmax});'
+        f'relation["building"]({ymin},{xmin},{ymax},{xmax}););'
         f'out geom;'
     )
 
@@ -181,14 +175,6 @@ def _write_buildings_cache(bounds, data):
 
 
 def _fetch_osm_buildings_layer(bounds):
-    """Fetch building footprints (ways only) from Overpass API for the given WGS84 bounds.
-
-    Tries several public Overpass mirrors in turn with a proper User-Agent
-    (its absence is the usual cause of a 406 'Not Acceptable' from
-    overpass-api.de) and a short per-endpoint timeout, since the public
-    instances are frequently overloaded. Results are cached on disk for a
-    while so repeated requests for the same area are instant.
-    """
     cached = _read_buildings_cache(bounds)
     if cached is not None:
         return _osm_json_to_layer(cached), 'cache'
@@ -221,20 +207,42 @@ def _fetch_osm_buildings_layer(bounds):
 def _osm_json_to_layer(data):
     layer = QgsVectorLayer('Polygon?crs=EPSG:4326', BUILDINGS_LAYER_NAME, 'memory')
     prov = layer.dataProvider()
+    
+    # QGIS 4 compatibility: Add osm_id field properly
+    prov.addAttributes([QgsField("osm_id", QMetaType.Type.QString)])
+    layer.updateFields()
 
     features = []
     for el in data.get('elements', []):
-        if el.get('type') != 'way':
-            continue
-        geom = el.get('geometry')
-        if not geom:
-            continue
-        coords = [QgsPointXY(pt['lon'], pt['lat']) for pt in geom]
-        if len(coords) < 3:
-            continue
-        feat = QgsFeature()
-        feat.setGeometry(QgsGeometry.fromPolygonXY([coords]))
-        features.append(feat)
+        geom_type = el.get('type')
+        coords_list = []
+        
+        # Parse standard ways
+        if geom_type == 'way' and 'geometry' in el:
+            coords = [QgsPointXY(pt['lon'], pt['lat']) for pt in el['geometry']]
+            if coords: 
+                coords_list.append(coords)
+                
+        # Parse relation members (complex polygons/courtyards)
+        elif geom_type == 'relation' and 'members' in el:
+            for member in el['members']:
+                if member.get('type') == 'way' and 'geometry' in member:
+                    coords = [QgsPointXY(pt['lon'], pt['lat']) for pt in member['geometry']]
+                    if coords: 
+                        coords_list.append(coords)
+                        
+        for coords in coords_list:
+            if len(coords) < 3:
+                continue
+            
+            # FIX 3: Force ring closure to prevent QGIS from dropping unclosed ways
+            if coords[0] != coords[-1]:
+                coords.append(coords[0])
+            
+            feat = QgsFeature(layer.fields())
+            feat.setGeometry(QgsGeometry.fromPolygonXY([coords]))
+            feat['osm_id'] = str(el.get('id', ''))
+            features.append(feat)
 
     prov.addFeatures(features)
     layer.updateExtents()
@@ -390,10 +398,6 @@ class MapillaryClickPreviewPlugin:
         self.iface.addPluginToMenu('&Mapillary', self.add_buildings_action)
         self.iface.addPluginToMenu('&Mapillary', self.clear_action)
 
-        # NOTE: coverage loading is intentionally NOT tied to mapCanvasRefreshed.
-        # It only runs when the user explicitly triggers one of the "Load…" actions,
-        # to avoid re-downloading/re-rendering tiles on every pan/zoom.
-
         try:
             tool.enable_auto_identify_preview()
         except Exception as e:
@@ -475,8 +479,7 @@ class MapillaryClickPreviewPlugin:
         height = abs(bounds[3] - bounds[1])
         if width > MAX_BUILDINGS_BBOX_DEG or height > MAX_BUILDINGS_BBOX_DEG:
             QgsMessageLog.logMessage(
-                'Area too large for OSM buildings lookup. Zoom in further or select a smaller '
-                f'area (max ~{MAX_BUILDINGS_BBOX_DEG}° per side) to avoid Overpass timeouts.',
+                f'Area too large for OSM buildings lookup. Maximum allowed is ~{MAX_BUILDINGS_BBOX_DEG}° per side.',
                 'Mapillary', Qgis.Warning)
             return None
 
@@ -566,7 +569,7 @@ class MapillaryClickPreviewPlugin:
 
     def _remove_buildings_layers(self):
         for layer in list(QgsProject.instance().mapLayers().values()):
-            if isinstance(layer, QgsVectorLayer) and layer.name() == BUILDINGS_LAYER_NAME:
+            if isinstance(layer, QgsVectorLayer) and layer.name().startswith(BUILDINGS_LAYER_NAME):
                 try:
                     QgsProject.instance().removeMapLayer(layer.id())
                 except Exception:
@@ -601,7 +604,6 @@ class MapillaryClickPreviewPlugin:
     # ------------------------------------------------------------------
 
     def _get_active_aoi_bounds(self):
-        """Use the extent of the selected feature(s) in the active layer as AOI, if any."""
         layer = self.iface.activeLayer()
         if isinstance(layer, QgsVectorLayer) and layer.selectedFeatureCount() > 0:
             box = layer.boundingBoxOfSelected()
@@ -622,7 +624,7 @@ class MapillaryClickPreviewPlugin:
         return (wgs84_min.x(), wgs84_min.y(), wgs84_max.x(), wgs84_max.y())
 
     # ------------------------------------------------------------------
-    # Mapillary coverage loading (only runs when explicitly triggered)
+    # Mapillary coverage loading
     # ------------------------------------------------------------------
 
     def _load_coverage(self, tile_set='original', force=False, bounds=None, append=False):
@@ -644,9 +646,6 @@ class MapillaryClickPreviewPlugin:
             QgsMessageLog.logMessage('Extent/AOI is not valid for tile loading.', 'Mapillary', Qgis.Warning)
             return
 
-        # The requested ROI, not the current QGIS canvas, determines the tile
-        # resolution. This prevents a zoomed-out/zoomed-in canvas from changing
-        # how much Mapillary data is requested for the selected OAM scene.
         target_pixels = 512.0
         map_units_per_pixel = max(abs(bounds[2] - bounds[0]), abs(bounds[3] - bounds[1])) / target_pixels
         zoom_level = _zoom_for_pixel_size(map_units_per_pixel)

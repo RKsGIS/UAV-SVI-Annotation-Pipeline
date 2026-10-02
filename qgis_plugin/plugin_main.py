@@ -12,7 +12,7 @@ import requests
 
 from qgis.PyQt.QtCore import Qt, QMetaType
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QDockWidget, QDoubleSpinBox, QFormLayout, QGroupBox, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from qgis.PyQt.QtWidgets import QAction, QDockWidget, QDoubleSpinBox, QFormLayout, QGroupBox, QLabel, QLineEdit, QPushButton, QScrollArea, QTabWidget, QVBoxLayout, QWidget
 from qgis.core import (
     QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsFeature, QgsRectangle, QgsSingleSymbolRenderer,
     QgsField, QgsFillSymbol, QgsGeometry, QgsLineSymbol, QgsMessageLog, QgsProject,
@@ -21,6 +21,7 @@ from qgis.core import (
 
 from . import mapillary_backend
 from . import mapillary_click_tool as tool
+from .label_panel import LabelPanel
 
 PLUGIN_NAME = 'UAV/SVI Annotation Explorer'
 TEMP_PREFIX = 'TEMP • UAV/SVI • '
@@ -98,6 +99,10 @@ class Panel(QWidget):
         for b in (self.uav,self.svi,self.osm,self.directions,self.preview): b.setMinimumHeight(36); gl.addWidget(b)
         self.uav.clicked.connect(plugin.display_uav); self.svi.clicked.connect(plugin.display_svi); self.osm.clicked.connect(plugin.display_osm); self.directions.clicked.connect(plugin.calculate_directions); self.preview.clicked.connect(plugin.preview_selected_mapillary)
         root.addWidget(g)
+        pair=QGroupBox('Confirm pair for labelling'); pl=QVBoxLayout(pair)
+        self.notes=QLineEdit(); self.notes.setPlaceholderText('Matching cues, e.g. blue roof + corner tank')
+        self.logpair=QPushButton('✔  Log previewed building + image as pair'); self.logpair.setMinimumHeight(36); self.logpair.clicked.connect(plugin.log_pair)
+        pl.addWidget(self.notes); pl.addWidget(self.logpair); root.addWidget(pair)
         settings=QGroupBox('Building search'); form=QFormLayout(settings)
         self.buffer=QDoubleSpinBox(); self.buffer.setRange(5,1000); self.buffer.setSingleStep(10); self.buffer.setValue(QgsSettings().value('uavsvi/building_buffer_m',100.0,type=float)); self.buffer.setSuffix(' m'); self.buffer.valueChanged.connect(lambda v: QgsSettings().setValue('uavsvi/building_buffer_m',v)); form.addRow('Search buffer:',self.buffer); root.addWidget(settings)
         self.status=QLabel('Ready'); self.status.setWordWrap(True); self.status.setStyleSheet('padding:8px;background:#f8fafc;border-radius:6px;'); root.addWidget(self.status)
@@ -113,7 +118,7 @@ class Panel(QWidget):
 
 class UAVSVIAnnotationPlugin:
     def __init__(self,iface):
-        self.iface=iface; self.dock=None; self.action=None; self.panel=None
+        self.iface=iface; self.dock=None; self.action=None; self.panel=None; self.label_panel=None; self.last_pair=None
         self.backend=mapillary_backend.MapillaryClickPreviewPlugin(iface)
         self.uav=None; self.uavs=[]; self.direction=None; self.direction_arrow_layer=None; self.direction_arrow=None; self.highlight=None; self.connection=None; self.relevant_buildings=None; self.qualified_svi=None
         self._layers=[]
@@ -123,7 +128,9 @@ class UAVSVIAnnotationPlugin:
         self.action=QAction(icon,PLUGIN_NAME,self.iface.mainWindow()); self.action.triggered.connect(self.toggle)
         self.iface.addToolBarIcon(self.action); self.iface.addPluginToMenu('&UAV/SVI',self.action)
         self.dock=QDockWidget(PLUGIN_NAME,self.iface.mainWindow()); self.dock.setObjectName('UAVSVIAnnotationDock'); self.dock.setMinimumWidth(390)
-        self.panel=Panel(self); scroll=QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.panel); self.dock.setWidget(scroll)
+        self.panel=Panel(self); scroll=QScrollArea(); scroll.setWidgetResizable(True); scroll.setWidget(self.panel)
+        self.label_panel=LabelPanel(self.iface)
+        tabs=QTabWidget(); tabs.addTab(scroll,'Explore'); tabs.addTab(self.label_panel,'Label'); self.dock.setWidget(tabs)
         self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.dock)
         self.iface.mapCanvas().mapCanvasRefreshed.connect(self._scene_label)
         self._scene_label()
@@ -141,6 +148,12 @@ class UAVSVIAnnotationPlugin:
         if self.dock: self.iface.removeDockWidget(self.dock); self.dock.deleteLater()
 
     def toggle(self): self.dock.setVisible(not self.dock.isVisible())
+
+    def log_pair(self):
+        if not self.last_pair:
+            self.panel.msg('Preview a Mapillary image with a highlighted building first.','warning'); return
+        osm_id,mid,dist,compass=self.last_pair
+        self.panel.msg(self.label_panel.log_pair(osm_id,mid,dist,compass,self.panel.notes.text()))
 
     def _scene_label(self):
         if not self.panel: return
@@ -578,6 +591,7 @@ class UAVSVIAnnotationPlugin:
             if m and (best is None or m[2]<best[2]): best=m
         if best:
             self._highlight(sf,layer,best)
+            self.last_pair=(str(field_value(best[0],('osm_id','id'))),str(result['id']),round(float(best[2]),1),field_value(sf,COMPASS_FIELDS))
             self.panel.msg(f'Previewing <b>{result["id"]}</b>. Relevant building highlighted; red = SVI to centroid; blue = camera compass direction.')
         else:
             self.panel.msg(f'Previewing Mapillary image <b>{result["id"]}</b>. No building was found within the search buffer.')

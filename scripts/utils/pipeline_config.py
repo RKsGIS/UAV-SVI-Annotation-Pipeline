@@ -11,6 +11,20 @@ INPUT_DIR = DATA_DIR / "input"
 INTERMEDIATE_DIR = DATA_DIR / "intermediate"
 OUTPUT_PAIRS_DIR = DATA_DIR / "output_pairs"
 
+CATALOG_DIR = DATA_DIR / "catalog"
+ALL_UAV_JSON = CATALOG_DIR / "all_uav.json"
+OAM_SCENES_FILE = CATALOG_DIR / "oam_scenes.gpkg"
+SCENE_BBOX_CSV = CATALOG_DIR / "scene_bbox_pass_fail.csv"
+CANDIDATES_CSV = CATALOG_DIR / "candidates_with_osm_status.csv"
+SCORES_CSV = CATALOG_DIR / "scene_enrichment_scores.csv"
+SCENES_MASTER_FILE = CATALOG_DIR / "scenes_master.gpkg"
+SCENE_CLAIMS_CSV = CATALOG_DIR / "scene_claims.csv"
+CHECK_CACHE_DIR = CATALOG_DIR / "cache"
+OSM_DIR = CATALOG_DIR / "osm_geojson_results"
+MAP_DIR = CATALOG_DIR / "mapillary_geojson_results"
+LOS_DIR = CATALOG_DIR / "los_geojson_results"
+NE_COUNTRIES_URL = "https://naturalearth.s3.amazonaws.com/10m_cultural/ne_10m_admin_0_countries.zip"
+
 SELECTED_SCENES_FILE = DATA_DIR / "selected_scenes.gpkg"
 BUILDING_ASSIGNMENTS_FILE = INTERMEDIATE_DIR / "building_uav_assignments.gpkg"
 MAPILLARY_POINTS_FILE = INTERMEDIATE_DIR / "mapillary_points.gpkg"
@@ -62,6 +76,11 @@ TARGET_CLASSES = {
 def ensure_runtime_directories() -> None:
     for path in [
         INPUT_DIR,
+        CATALOG_DIR,
+        CHECK_CACHE_DIR,
+        OSM_DIR,
+        MAP_DIR,
+        LOS_DIR,
         INTERMEDIATE_DIR,
         OUTPUT_PAIRS_DIR,
         UAV_RASTERS_DIR,
