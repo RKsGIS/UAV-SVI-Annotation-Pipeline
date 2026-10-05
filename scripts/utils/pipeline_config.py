@@ -27,15 +27,12 @@ LOS_DIR = CATALOG_DIR / "los_geojson_results"
 NE_COUNTRIES_URL = "https://naturalearth.s3.amazonaws.com/10m_cultural/ne_10m_admin_0_countries.zip"
 
 SELECTED_SCENES_FILE = DATA_DIR / "selected_scenes.gpkg"
-BUILDING_ASSIGNMENTS_FILE = INTERMEDIATE_DIR / "building_uav_assignments.gpkg"
-MAPILLARY_POINTS_FILE = INTERMEDIATE_DIR / "mapillary_points.gpkg"
-BUILDINGS_WITH_SVI_FILE = INTERMEDIATE_DIR / "buildings_with_svi.gpkg"
-SVI_VIEW_GEOMETRY_CSV = INTERMEDIATE_DIR / "svi_view_geometry.csv"
+OAM_META_DIR = INTERMEDIATE_DIR / "oam_meta"
+BUILDINGS_DIR = INTERMEDIATE_DIR / "buildings"
+MAPILLARY_POINTS_DIR = INTERMEDIATE_DIR / "mapillary_points"
+PAIRS_CSV = INTERMEDIATE_DIR / "pairs_assignments.csv"
 UAV_RASTERS_DIR = INTERMEDIATE_DIR / "uav_rasters"
 SVI_PANORAMAS_DIR = INTERMEDIATE_DIR / "svi_panoramas"
-UAV_CHIPS_DIR = INTERMEDIATE_DIR / "uav_chips"
-SVI_CHIPS_DIR = INTERMEDIATE_DIR / "svi_chips"
-MAPILLARY_DETECTIONS_DIR = INTERMEDIATE_DIR / "mapillary_detections"
 
 load_dotenv(ROOT_DIR / ".env")
 
@@ -86,8 +83,8 @@ def ensure_runtime_directories() -> None:
         OUTPUT_PAIRS_DIR,
         UAV_RASTERS_DIR,
         SVI_PANORAMAS_DIR,
-        UAV_CHIPS_DIR,
-        SVI_CHIPS_DIR,
-        MAPILLARY_DETECTIONS_DIR,
+        OAM_META_DIR,
+        BUILDINGS_DIR,
+        MAPILLARY_POINTS_DIR,
     ]:
         path.mkdir(parents=True, exist_ok=True)

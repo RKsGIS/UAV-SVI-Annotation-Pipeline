@@ -1,46 +1,44 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
-import geopandas as gpd
 import requests
-import rasterio
-from rasterio.mask import mask
-from shapely.geometry import box, mapping
+from tqdm import tqdm
 
 from . import pipeline_config as cfg
 
+OAM_META_URL = "https://api.openaerialmap.org/meta"
 
-def resolve_scene_asset_url(row, explicit_field: str | None = None):
-    fields = [explicit_field] if explicit_field else []
-    fields.extend(cfg.DEFAULT_SCENE_URL_FIELDS)
-    for field in fields:
-        if field and field in row and row[field]:
-            return row[field]
-    return None
+
+def fetch_scene_meta(scene_id: str) -> dict:
+    """OAM metadata record of one scene (cached). 'uuid' is the GeoTIFF URL, 'bbox' is lon/lat."""
+    cache = cfg.OAM_META_DIR / f"{scene_id}.json"
+    if cache.exists():
+        return json.loads(cache.read_text())
+    r = requests.get(OAM_META_URL, params={"_id": scene_id}, timeout=60)
+    r.raise_for_status()
+    results = r.json().get("results", [])
+    if not results:
+        raise ValueError(f"No OAM scene with _id={scene_id}")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(results[0]))
+    return results[0]
 
 
 def download_uav_raster(url: str, destination: str | Path) -> Path:
+    """Download once; a partially downloaded file is never mistaken for a finished one."""
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         return destination
-    with requests.get(url, stream=True, timeout=120) as response:
+    part = destination.with_suffix(destination.suffix + ".part")
+    with requests.get(url, stream=True, timeout=(15, 120)) as response:
         response.raise_for_status()
-        with destination.open('wb') as handle:
+        total = int(response.headers.get("content-length", 0)) or None
+        with part.open("wb") as handle, tqdm(total=total, unit="B", unit_scale=True, desc=destination.name) as bar:
             for chunk in response.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    handle.write(chunk)
+                handle.write(chunk)
+                bar.update(len(chunk))
+    part.rename(destination)
     return destination
-
-
-def raster_fully_covers_geometry(raster_path: str | Path, geometry, geometry_crs) -> bool:
-    with rasterio.open(raster_path) as src:
-        geometry = gpd.GeoSeries([geometry], crs=geometry_crs).to_crs(src.crs).iloc[0]
-        raster_bounds = box(*src.bounds)
-        return raster_bounds.contains(geometry)
-
-
-def try_crop(raster_path: str | Path, geometry):
-    with rasterio.open(raster_path) as src:
-        return mask(src, [mapping(geometry)], crop=True, all_touched=False)

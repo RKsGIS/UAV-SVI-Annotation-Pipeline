@@ -10,7 +10,7 @@ This script can
                                   them in data/selected_scenes.gpkg by one merged scene
 
 Examples:
-  python scripts/00f_merge_overlaps.py --buildings data/input/osm_buildings.gpkg other.gpkg
+  python scripts/00f_merge_overlaps.py --buildings a.gpkg b.gpkg
   python scripts/00f_merge_overlaps.py --scene-ids 611cce7438f25a0006989180 663426676049ef00013b827c
 """
 
@@ -71,7 +71,7 @@ def merge_scenes(scene_ids):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--buildings", nargs="+", default=None)
-    parser.add_argument("--output", default=str(cfg.INPUT_DIR / "osm_buildings.gpkg"))
+    parser.add_argument("--output", default=str(cfg.INPUT_DIR / "merged_buildings.gpkg"))
     parser.add_argument("--scene-ids", nargs="+", default=None)
     args = parser.parse_args()
     if not args.buildings and not args.scene_ids:

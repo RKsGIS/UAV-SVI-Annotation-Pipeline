@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-06_validate_submission.py
+04_validate_submission.py
 Checks submission/labels_<name>.csv against the label vocabulary and the image folders.
 Exit code is non-zero if anything is wrong.
 """
@@ -30,6 +30,8 @@ def main() -> None:
     else:
         if df["osm_id"].duplicated().any():
             errors.append("duplicate osm_id values")
+        errors += [f"{o}: mapillary_id missing" for o in df.loc[df["mapillary_id"] == "", "osm_id"]]
+        errors += [f"{o}: is_pano must be True or False" for o in df.loc[~df["is_pano"].isin(["True", "False"]), "osm_id"]]
         for col in LABEL_COLUMNS:
             bad = df.loc[~df[col].isin(VOCAB[col]), ["osm_id", col]]
             errors += [f"{r.osm_id}: {col}='{getattr(r, col)}' not in {VOCAB[col]}" for r in bad.itertuples()]

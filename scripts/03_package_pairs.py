@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-05_package_pairs.py
+03_package_pairs.py
 Turns data/output_pairs/{osm_id}_uav.png + {osm_id}_svi.png into the submission format:
   submission/uav/{osm_id}.png   256x256, aspect ratio kept (letterboxed)
   submission/svi/{osm_id}.png   256x256
@@ -12,15 +12,14 @@ import argparse
 import re
 
 import cv2
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 
 from utils import pipeline_config as cfg
-from utils.labels import CSV_COLUMNS, IMAGE_SIZE
+from utils.labels import CSV_COLUMNS, IMAGE_SIZE, META_COLUMNS
 
 SUBMISSION_DIR = cfg.ROOT_DIR / "submission"
-INDEX_COLUMNS = ["osm_id", "scene_id", "mapillary_id", "distance_m", "bearing_to_building", "relative_angle"]
+INDEX_COLUMNS = ["osm_id", "scene_id", "mapillary_id", "distance_m", "bearing", "relative_angle", "is_pano"]
 
 
 def letterbox(img: np.ndarray, size: int = IMAGE_SIZE) -> np.ndarray:
@@ -65,15 +64,17 @@ def main() -> None:
     if csv_path.exists():
         old = pd.read_csv(csv_path, dtype=str, keep_default_na=False)
         new = new.merge(old, on="osm_id", how="left")
+    if cfg.PAIRS_CSV.exists():
+        meta = pd.read_csv(cfg.PAIRS_CSV, dtype=str, keep_default_na=False)[["osm_id", *META_COLUMNS]]
+        new = new.drop(columns=META_COLUMNS, errors="ignore").merge(meta, on="osm_id", how="left")
     for col in CSV_COLUMNS:
         if col not in new:
             new[col] = ""
     new[CSV_COLUMNS].fillna("").to_csv(csv_path, index=False)
     print(f"{len(ids)} complete pairs -> {SUBMISSION_DIR}\nLabel template: {csv_path}")
 
-    if cfg.BUILDINGS_WITH_SVI_FILE.exists():
-        info = gpd.read_file(cfg.BUILDINGS_WITH_SVI_FILE)
-        info["osm_id"] = info["osm_id"].astype(str)
+    if cfg.PAIRS_CSV.exists():
+        info = pd.read_csv(cfg.PAIRS_CSV, dtype=str, keep_default_na=False)
         keep = [c for c in INDEX_COLUMNS if c in info.columns]
         index_path = SUBMISSION_DIR / f"pairs_index_{args.name}.csv"
         info[info["osm_id"].isin(ids)][keep].to_csv(index_path, index=False)

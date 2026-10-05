@@ -152,8 +152,8 @@ class UAVSVIAnnotationPlugin:
     def log_pair(self):
         if not self.last_pair:
             self.panel.msg('Preview a Mapillary image with a highlighted building first.','warning'); return
-        osm_id,mid,dist,compass=self.last_pair
-        self.panel.msg(self.label_panel.log_pair(osm_id,mid,dist,compass,self.panel.notes.text()))
+        osm_id,mid,pano,dist,compass=self.last_pair
+        self.panel.msg(self.label_panel.log_pair(osm_id,mid,pano,dist,compass,self.panel.notes.text()))
 
     def _scene_label(self):
         if not self.panel: return
@@ -591,7 +591,7 @@ class UAVSVIAnnotationPlugin:
             if m and (best is None or m[2]<best[2]): best=m
         if best:
             self._highlight(sf,layer,best)
-            self.last_pair=(str(field_value(best[0],('osm_id','id'))),str(result['id']),round(float(best[2]),1),field_value(sf,COMPASS_FIELDS))
+            self.last_pair=(str(field_value(best[0],('osm_id','id'))),str(result['id']),str(field_value(sf,('is_pano',))).lower() in ('1','true'),round(float(best[2]),1),field_value(sf,COMPASS_FIELDS))
             self.panel.msg(f'Previewing <b>{result["id"]}</b>. Relevant building highlighted; red = SVI to centroid; blue = camera compass direction.')
         else:
             self.panel.msg(f'Previewing Mapillary image <b>{result["id"]}</b>. No building was found within the search buffer.')

@@ -22,8 +22,8 @@ VOCAB = {
     "material_rooftop": ["concrete", "metal", "tile", "asbestos", "thatch_wood", "other", "unknown"],
     "material_wall": ["concrete", "brick", "metal", "wood", "glass", "other", "unknown"],
 }
-COLUMNS = ["osm_id", *VOCAB]
-PAIR_COLUMNS = ["osm_id", "mapillary_id", "distance_m", "compass_deg", "logged_at", "notes"]
+COLUMNS = ["osm_id", "mapillary_id", "is_pano", *VOCAB]
+PAIR_COLUMNS = ["osm_id", "mapillary_id", "is_pano", "distance_m", "compass_deg", "logged_at", "notes"]
 SETTING = "uavsvi/submission_dir"
 
 
@@ -119,7 +119,7 @@ class LabelPanel(QWidget):
         for column, box in self.boxes.items():
             box.setCurrentText(row.get(column, ""))
         done = sum(all(r.get(c) for c in VOCAB) for r in self.rows)
-        self.info.setText(f"<b>{osm_id}</b>  ({self.pos + 1}/{len(self.rows)}, {done} labelled)")
+        self.info.setText(f"<b>{osm_id}</b>  Mapillary {row.get('mapillary_id', '')} (pano: {row.get('is_pano', '')})  ({self.pos + 1}/{len(self.rows)}, {done} labelled)")
 
     def go(self, step: int):
         if self.rows:
@@ -148,7 +148,7 @@ class LabelPanel(QWidget):
                     self.iface.mapCanvas().zoomToSelected(layer)
                     return
 
-    def log_pair(self, osm_id: str, mapillary_id: str, distance_m, compass_deg, notes: str) -> str:
+    def log_pair(self, osm_id: str, mapillary_id: str, is_pano, distance_m, compass_deg, notes: str) -> str:
         """Append a human-confirmed building/image pair to selected_pairs.csv for script 02 (--manual-pairs)."""
         folder = self.folder
         if not folder:
@@ -162,7 +162,7 @@ class LabelPanel(QWidget):
             writer = csv.DictWriter(fh, fieldnames=PAIR_COLUMNS)
             if new_file:
                 writer.writeheader()
-            writer.writerow({"osm_id": osm_id, "mapillary_id": mapillary_id, "distance_m": distance_m,
+            writer.writerow({"osm_id": osm_id, "mapillary_id": mapillary_id, "is_pano": is_pano, "distance_m": distance_m,
                              "compass_deg": compass_deg, "logged_at": datetime.datetime.now().isoformat(timespec="seconds"),
                              "notes": notes})
         return f"Logged {osm_id} <-> {mapillary_id} in {path}"

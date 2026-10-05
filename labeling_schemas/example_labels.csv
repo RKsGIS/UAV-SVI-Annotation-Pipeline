@@ -1,4 +1,4 @@
-osm_id,structural_openness,number_of_floors,vegetation,material_rooftop,material_wall
-338449341,closed_structure,one,yes,metal,concrete
-338449342,closed_structure,two,no,concrete,brick
-338449343,open_structure,one,no,metal,unknown
+osm_id,mapillary_id,is_pano,structural_openness,number_of_floors,vegetation,material_rooftop,material_wall
+338449341,498271934822615,True,closed_structure,one,yes,metal,concrete
+338449342,498271934822616,True,closed_structure,two,no,concrete,brick
+338449343,498271934822617,False,open_structure,one,no,metal,unknown

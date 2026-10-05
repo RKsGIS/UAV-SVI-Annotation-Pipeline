@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-07_labelstudio.py
+05_labelstudio.py
   tasks   -> submission/labelstudio_tasks.json to import into Label Studio
   export  -> merge a Label Studio JSON export into submission/labels_<name>.csv
 
